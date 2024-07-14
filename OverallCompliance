@@ -1,0 +1,204 @@
+# Dermatology compliance project, Stephen Gadomski, PhD
+
+# Additional considerations
+# If a patient does have a visit that meets compliance, restart the interval at the date of this visit
+# If a patient is compliant in all intervals and is not compliant in the final interval (i.e., that which extends beyond the end date), then the patient is still deemed compliant.
+
+
+#### include an additional re-evaluation step for the final interval, 2nd point above ####
+# still underestimating compliance
+
+# Load libraries
+library(RODBC)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+
+# Connect to the Access database
+db <- odbcConnectAccess2007("C:/Users/gadom/OneDrive/Desktop/Dermatology Project/Dermatology Project 1.accdb")
+
+# Read the tables into R
+medical_history <- sqlFetch(db, "Patients")
+family_history <- sqlFetch(db, "FamHx")
+dermatology_visits <- sqlFetch(db, "Visits")
+
+# Close the connection
+close(db)
+
+# Convert date columns to Date type
+medical_history <- medical_history %>% mutate(GeneticsVisit = ymd(GeneticsVisit))
+dermatology_visits <- dermatology_visits %>% mutate(VisitDate = ymd(VisitDate))
+
+# Print summaries to verify correct data import and conversion
+print(summary(medical_history))
+print(summary(dermatology_visits))
+
+# Count and exclude patients with a GeneticsVisit after January 14, 2024
+excluded_patients <- medical_history %>% filter(GeneticsVisit > dmy("14/01/2024"))
+excluded_count <- nrow(excluded_patients)
+
+# Print the number of excluded patients
+print(paste("Number of excluded patients:", excluded_count))
+
+# Filter patients
+medical_history <- medical_history %>% filter(GeneticsVisit <= dmy("14/01/2024"))
+
+# Define guidelines for each mutation and a guideline interval in months for each mutation
+mutation_guidelines <- data.frame(
+  Mutation = c("BRCA2", "PALB2", "MSH6", "MLH1", "PMS2", "CHEK2", "TP53", "MITF", "BRCA1",
+               "PTEN", "NF1", "FH", "SDHA", "FLCN", "ATM", "CDKN2A", "RET", "POT1", "TTR", "MSH2", "MUTYH", "BARD1"), 
+  IntervalMonths = c(18, 18, 30, 30, 30, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 12, 18, 18, 18, 30, 18, 18)
+)
+
+# Split multiple genes into separate rows and merge with guidelines
+medical_history <- medical_history %>%
+  separate_rows(Mutation, sep = ",") %>%
+  left_join(mutation_guidelines, by = "Mutation") %>%
+  group_by(MRN, GeneticsVisit) %>%
+  summarize(
+    IntervalMonths = ifelse(all(is.na(IntervalMonths)), 18, min(IntervalMonths, na.rm = TRUE)),
+    .groups = 'drop'
+  ) %>%
+  mutate(IntervalMonths = ifelse(is.infinite(IntervalMonths) | is.na(IntervalMonths), 18, IntervalMonths))
+
+# Print summary of medical history after merging
+print(summary(medical_history))
+
+# Join tables based on MRN
+combined_data <- medical_history %>%
+  left_join(dermatology_visits, by = "MRN") %>%
+  left_join(family_history, by = "MRN")
+
+# Print summary of combined data
+print(summary(combined_data))
+
+# Define a function to check compliance based on repeated guideline intervals and FBSE check
+check_compliance <- function(data, end_date) {
+  data %>%
+    group_by(MRN) %>%
+    summarize(
+      MRN = first(MRN),
+      GeneticsVisit = first(GeneticsVisit),
+      GuidelineInterval = first(IntervalMonths),
+      Compliant = {
+        # Check if the patient has any dermatology visits
+        if (all(is.na(data$VisitDate[data$MRN == first(MRN)]))) {
+          compliance <- FALSE
+        } else {
+          compliance <- TRUE
+          current_date <- GeneticsVisit
+          
+          # Perform interval-based compliance check
+          while (current_date <= end_date) {
+            interval_end <- current_date + months(GuidelineInterval)
+            if (is.na(interval_end)) break
+            visits_in_interval <- data$VisitDate[data$MRN == first(MRN) & data$VisitDate >= current_date & data$VisitDate <= interval_end & data$FBSE == TRUE]
+            
+            # Debugging print statements
+            print(paste("MRN:", first(MRN)))
+            print(paste("Checking interval from", current_date, "to", interval_end))
+            print(paste("Visits in interval:", length(visits_in_interval)))
+            
+            if (length(visits_in_interval) == 0) {
+              compliance <- FALSE
+            }
+            
+            current_date <- interval_end
+          }
+          
+          # Re-evaluate compliance for non-compliant patients with GeneticsVisit after January 14, 2023
+          if (!compliance & GeneticsVisit > dmy("14/01/2023")) {
+            prior_visits <- data$VisitDate[data$MRN == first(MRN) & data$VisitDate >= (GeneticsVisit - years(1)) & data$VisitDate < GeneticsVisit & data$FBSE == TRUE]
+            if (length(prior_visits) > 0) {
+              compliance <- TRUE
+            }
+          }
+          
+          # Additional re-evaluation step: ensure compliance in all intervals except the most recent
+          if (!compliance) {
+            interval_compliance <- TRUE
+            current_date <- GeneticsVisit
+            while (current_date <= (end_date - months(GuidelineInterval))) {
+              interval_end <- current_date + months(GuidelineInterval)
+              if (is.na(interval_end)) break
+              visits_in_interval <- data$VisitDate[data$MRN == first(MRN) & data$VisitDate >= current_date & data$VisitDate <= interval_end & data$FBSE == TRUE]
+              
+              # Debugging print statements
+              print(paste("MRN:", first(MRN)))
+              print(paste("Checking interval from", current_date, "to", interval_end))
+              print(paste("Visits in interval:", length(visits_in_interval)))
+              
+              if (length(visits_in_interval) == 0) {
+                interval_compliance <- FALSE
+                break
+              }
+              
+              current_date <- interval_end
+            }
+            if (interval_compliance) {
+              # Check the most recent interval
+              last_interval_start <- current_date
+              last_interval_end <- end_date
+              visits_in_last_interval <- data$VisitDate[data$MRN == first(MRN) & data$VisitDate >= last_interval_start & data$VisitDate <= last_interval_end & data$FBSE == TRUE]
+              
+              # Debugging print statements
+              print(paste("MRN:", first(MRN)))
+              print(paste("Checking last interval from", last_interval_start, "to", last_interval_end))
+              print(paste("Visits in last interval:", length(visits_in_last_interval)))
+              
+              # If the only non-compliance is in the final interval which extends beyond the end date, mark as compliant
+              if (length(visits_in_last_interval) == 0 && last_interval_end > end_date) {
+                compliance <- TRUE
+              } else if (length(visits_in_last_interval) == 0) {
+                compliance <- FALSE
+              }
+            } else {
+              compliance <- FALSE
+            }
+          }
+        }
+        
+        # Final compliance status
+        compliance_status <- ifelse(compliance, "Yes", "No")
+        
+        # Debugging print statements
+        print(paste("Final compliance for MRN", first(MRN), ":", compliance_status))
+        
+        compliance_status
+      }
+    )
+}
+
+# Define the end date for compliance check
+end_date <- ymd("2024-07-14")
+
+# Check compliance
+compliance_data <- check_compliance(combined_data, end_date)
+
+# Print summary of compliance data
+print(summary(compliance_data))
+
+# Filter for compliant patients
+compliant_patients <- compliance_data %>% filter(Compliant == "Yes")
+
+# List MRNs of compliant patients
+compliant_mrns <- compliant_patients$MRN
+print(compliant_mrns)
+
+# Filter for noncompliant patients
+noncompliant_patients <- compliance_data %>% filter(Compliant == "No")
+
+# List MRNs of noncompliant patients
+noncompliant_mrns <- noncompliant_patients$MRN
+print(noncompliant_mrns)
+
+# Plot compliance
+ggplot(compliance_data, aes(x = Compliant, fill = Compliant)) +
+  geom_bar() +
+  labs(
+    title = "Patient Compliance with Dermatology Visit Guidelines",
+    x = "Compliance",
+    y = "Number of Patients"
+  ) +
+  theme_minimal()
+
