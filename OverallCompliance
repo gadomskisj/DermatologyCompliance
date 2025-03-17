@@ -1,17 +1,375 @@
 # Dermatology compliance project, Stephen Gadomski, PhD
+#### Age distribution ####
+library(RODBC)
+library(dplyr)
+library(ggplot2)
 
-# Additional considerations
-# If a patient does have a visit that meets compliance, restart the interval at the date of this visit
-# If a patient is compliant in all intervals and is not compliant in the final interval (i.e., that which extends beyond the end date), then the patient is still deemed compliant.
+# Establishing connection to the access database
+conn <- odbcConnectAccess2007("C:\\Users\\gadom\\OneDrive\\Desktop\\Dermatology Project\\Dermatology Project 1.accdb")
+
+# Replace 'MedicalHistory', 'FamilyHistory', and 'DermatologyVisits' with actual table names
+medical_history <- sqlFetch(conn, "Patients")
+family_history <- sqlFetch(conn, "FamHx")
+dermatology_visits <- sqlFetch(conn, "Visits")
+
+# Close the connection
+odbcClose(conn)
+
+# Filter out patients with a GeneticsVisit after February 16, 2024
+medical_history <- medical_history %>%
+  filter(as.Date(GeneticsVisit, format="%Y-%m-%d") <= as.Date("2024-02-16"))
+
+# Age distribution with white background, gridlines, and increased axis text size
+ggplot(medical_history, aes(x = Age)) +
+  geom_histogram(binwidth = 5, fill = "lightblue", color = "black") +
+  labs(title = "Age Distribution", x = "Age", y = "Frequency") +
+  theme_minimal(base_size = 15) +
+  theme(panel.background = element_rect(fill = "white", color = NA),  # Set panel background to white
+        plot.background = element_rect(fill = "white", color = NA),  # Set plot background to white
+        axis.text.x = element_text(size = 14),  # Increase x-axis text size
+        axis.text.y = element_text(size = 14))  # Increase y-axis text size
+
+# Age distribution by sex with white background, gridlines, no legend, and increased axis text size
+ggplot(medical_history, aes(x = Age, fill = LegalSex)) +
+  geom_histogram(binwidth = 5, color = "black", position = "dodge") +
+  scale_fill_manual(values = c("Male" = "blue", "Female" = "pink")) +
+  labs(title = "Age Distribution by Sex", x = "Age", y = "Frequency") +
+  theme_minimal(base_size = 15) +
+  theme(panel.background = element_rect(fill = "white", color = NA),  # Set panel background to white
+        plot.background = element_rect(fill = "white", color = NA),  # Set plot background to white
+        legend.position = "none",  # Remove legend
+        axis.text.x = element_text(size = 14),  # Increase x-axis text size
+        axis.text.y = element_text(size = 14))  # Increase y-axis text size
 
 
-#### include an additional re-evaluation step for the final interval, 2nd point above ####
-# still underestimating compliance
 
+#### Race Distribution ####
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Assuming medical_history is already loaded
+
+# Create a new column 'Race_Classified' based on the conditions
+medical_history <- medical_history %>%
+  mutate(Race_Classified = case_when(
+    Race %in% c("Asian;White or Caucasian", "Black or African American;White or Caucasian") ~ "Other",
+    TRUE ~ Race
+  ))
+
+# Calculate the percentage of each race category
+race_data <- medical_history %>%
+  count(Race_Classified) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+# Define a custom color palette with softer colors
+soft_colors <- c( "#e78ac3", "#66c2a5", "#fc8d62","#ffd92f", "#8da0cb","#e5c494", "#b3b3b3")
+
+# Create the pie chart
+ggplot(race_data, aes(x = "", y = percentage, fill = Race_Classified)) +
+  geom_bar(width = 1, stat = "identity", color = "black") +
+  coord_polar("y") +
+  scale_fill_manual(values = soft_colors) +  
+  labs(title = "Race Distribution", x = "", y = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        panel.grid = element_blank()) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), position = position_stack(vjust = 0.5))
+
+
+# Create the pie chart without percentage values
+ggplot(race_data, aes(x = "", y = percentage, fill = Race_Classified)) +
+  geom_bar(width = 1, stat = "identity", color = "black") +
+  coord_polar("y") +
+  scale_fill_manual(values = soft_colors) +  
+  labs(title = "Race Distribution", x = "", y = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        panel.grid = element_blank())
+
+
+
+#### Ethnicity ####
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Assuming medical_history is already loaded
+
+# Calculate the percentage of each ethnicity category (Yes/No)
+ethnicity_data <- medical_history %>%
+  count(HispanicLatino) %>%
+  mutate(percentage = n / sum(n) * 100,
+         HispanicLatino = recode(HispanicLatino, "1" = "Hispanic/Latino", "0" = "Non-Hispanic/Latino"))
+
+# Define a custom color palette with two colors
+soft_colors <- c("#a6cee3", "#1f78b4")
+
+# Create the pie chart with percentage values
+ggplot(ethnicity_data, aes(x = "", y = percentage, fill = HispanicLatino)) +
+  geom_bar(width = 1, stat = "identity", color = "black") +
+  coord_polar("y") +
+  scale_fill_manual(values = soft_colors) +  
+  labs(title = "Ethnicity Distribution (Hispanic/Latino)", x = "", y = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        panel.grid = element_blank()) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), position = position_stack(vjust = 0.5))
+
+# Create the pie chart without percentage values
+ggplot(ethnicity_data, aes(x = "", y = percentage, fill = HispanicLatino)) +
+  geom_bar(width = 1, stat = "identity", color = "black") +
+  coord_polar("y") +
+  scale_fill_manual(values = soft_colors) +  
+  labs(title = "Ethnicity Distribution (Hispanic/Latino)", x = "", y = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        panel.grid = element_blank())
+
+
+
+#### Gene distribution ####
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Assuming medical_history is already loaded
+
+# Separate the genes into individual rows
+medical_history <- medical_history %>%
+  separate_rows(`Mutation`, sep = ";")
+
+# Trim any leading or trailing whitespace from the gene names
+medical_history <- medical_history %>%
+  mutate(AffectedGene = trimws(`Mutation`))
+
+# Define gene categories
+gene_categories <- c(
+  "BRCA1" = "BRCA1",
+  "BRCA2" = "BRCA2",
+  "MLH1" = "Lynch syndrome",
+  "MSH2" = "Lynch syndrome",
+  "MSH6" = "Lynch syndrome",
+  "PMS2" = "Lynch syndrome",
+  "CHEK2" = "Other",
+  "MUTYH" = "Other",
+  "PALB2" = "Other",
+  "ATM" = "Other",
+  "CDKN2A" = "Other",
+  "FH" = "Other",
+  "FLCN" = "Other",
+  "MITF" = "Other",
+  "POT1" = "Other",
+  "PTEN" = "Other",
+  "RET" = "Other",
+  "TP53" = "Other",
+  "NF1" = "Other",
+  "BARD1" = "Other",
+  "SDHA" = "Other",
+  "TTR" = "Other"
+)
+
+# Map the mutations to categories
+medical_history <- medical_history %>%
+  mutate(Category = gene_categories[AffectedGene])
+
+# Calculate the percentage of each affected gene category
+gene_data <- medical_history %>%
+  count(Category) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+# Define a custom color palette with more colors
+soft_colors <- c(
+  "#F8766D", "#7CAE00", "#00BFC4", "#C77CFF",
+  "#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", 
+  "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
+  "#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", 
+  "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", 
+  "#cab2d6", "#6a3d9a", "#ffff99", "#b15928",
+  "#fbb4ae", "#b3cde3", "#ccebc5", "#decbe4",
+  "#fed9a6", "#ffffcc", "#e5d8bd", "#fdbf6f"
+)
+
+# Ensure the color palette has enough colors
+if (nrow(gene_data) > length(soft_colors)) {
+  soft_colors <- colorRampPalette(soft_colors)(nrow(gene_data))
+}
+
+# Create the pie chart
+ggplot(gene_data, aes(x = "", y = percentage, fill = Category)) +
+  geom_bar(stat = "identity", width = 1, color = "black") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = soft_colors) +
+  labs(title = "Affected Gene Distribution by Category") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank()) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")),
+            position = position_stack(vjust = 0.5))
+
+#Pie chart without percentages
+# Create the pie chart
+ggplot(gene_data, aes(x = "", y = percentage, fill = Category)) +
+  geom_bar(stat = "identity", width = 1, color = "black") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = soft_colors) +
+  labs(title = "Affected Gene Distribution by Category") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid = element_blank())
+
+
+#### Compliance analysis ####
+#### Overall compliance - HCC TO END ####
 # Load libraries
 library(RODBC)
 library(tidyverse)
-library(lubridate)
+
+# Connect to the Access database
+db <- odbcConnectAccess2007("C:/Users/gadom/OneDrive/Desktop/Dermatology Project/Dermatology Project 1.accdb")
+
+# Read the tables into R
+medical_history <- sqlFetch(db, "Patients")
+family_history <- sqlFetch(db, "FamHx")
+dermatology_visits <- sqlFetch(db, "Visits")
+
+# Close the connection
+close(db)
+
+# Filter out patients with a GeneticsVisit after February 16, 2024
+medical_history <- medical_history %>%
+  filter(as.Date(GeneticsVisit, format="%Y-%m-%d") <= as.Date("2024-02-16"))
+
+# Extract the compliance data
+compliance_data <- medical_history %>%
+  select(MRN, CompliantVisit)
+
+# Summarize the number of compliant and non-compliant patients
+compliance_summary <- compliance_data %>%
+  group_by(CompliantVisit) %>%
+  summarise(Count = n())
+
+# Replace logical values with "yes" and "no"
+compliance_summary$CompliantVisit <- ifelse(compliance_summary$CompliantVisit, "compliant", "non-compliant")
+
+# Calculate percentages
+compliance_summary <- compliance_summary %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+# Plot the data using ggplot2 as a pie chart
+ggplot(compliance_summary, aes(x = "", y = Count, fill = CompliantVisit)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = c("compliant" = "#1f78b4", "non-compliant" = "#fc8d62")) + 
+  geom_text(aes(label = paste0(Count, " (", round(Percentage, 1), "%)")), 
+            position = position_stack(vjust = 0.5), size = 6, color = "white") +  
+  labs(title = "Compliance Using Genetics Clinic Visit") +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 17, face = "bold"),  
+    legend.title = element_blank(),
+    legend.position = "bottom",  
+    legend.text = element_text(size = 13)  
+  )
+
+
+# Plot the data using ggplot2 as a pie chart
+ggplot(compliance_summary, aes(x = "", y = Count, fill = CompliantVisit)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = c("compliant" = "#1f78b4", "non-compliant" = "#fc8d62")) + 
+  labs(title = "Compliance Using Genetics Clinic Visit") +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 17, face = "bold"),  
+    legend.title = element_blank(),
+    legend.position = "bottom",  
+    legend.text = element_text(size = 13)  
+  )
+
+
+
+
+
+
+
+
+#### Overall compliance - TEST TO HCC ####
+# Load libraries
+library(RODBC)
+library(tidyverse)
+
+# Connect to the Access database
+db <- odbcConnectAccess2007("C:/Users/gadom/OneDrive/Desktop/Dermatology Project/Dermatology Project 1.accdb")
+
+# Read the tables into R
+medical_history <- sqlFetch(db, "Patients")
+family_history <- sqlFetch(db, "FamHx")
+dermatology_visits <- sqlFetch(db, "Visits")
+
+# Close the connection
+close(db)
+
+# Filter out patients with "T2VExcluded" checked
+filtered_medical_history <- medical_history %>%
+  filter(T2VExcluded == FALSE | is.na(T2VExcluded))
+
+# Extract the compliance data
+compliance_data <- filtered_medical_history %>%
+  select(MRN, CompliantT2V)
+
+# Summarize the number of compliant and non-compliant patients
+compliance_summary <- compliance_data %>%
+  group_by(CompliantT2V) %>%
+  summarise(Count = n())
+
+# Replace logical values with "yes" and "no"
+compliance_summary$CompliantT2V <- ifelse(compliance_summary$CompliantT2V, "compliant", "non-compliant")
+
+# Calculate percentages
+compliance_summary <- compliance_summary %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+# Plot the data using ggplot2 as a pie chart
+ggplot(compliance_summary, aes(x = "", y = Count, fill = CompliantT2V)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = c("compliant" = "#1f78b4", "non-compliant" = "#fc8d62")) + 
+  geom_text(aes(label = paste0(Count, " (", round(Percentage, 1), "%)")), 
+            position = position_stack(vjust = 0.5), size = 6, color = "white") +  
+  labs(title = "Compliance Test to HCC Visit") +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 17, face = "bold"),  
+    legend.title = element_blank(),
+    legend.position = "bottom",  
+    legend.text = element_text(size = 13)  
+  )
+
+
+# Plot the data using ggplot2 as a pie chart
+ggplot(compliance_summary, aes(x = "", y = Count, fill = CompliantT2V)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = c("compliant" = "#1f78b4", "non-compliant" = "#fc8d62")) + 
+  labs(title = "Compliance Test to HCC Visit") +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 17, face = "bold"),  
+    legend.title = element_blank(),
+    legend.position = "bottom",  
+    legend.text = element_text(size = 13)  
+  )
+
+
+#### Biopsy analysis ####
+# Load libraries
+library(RODBC)
+library(tidyverse)
 library(ggplot2)
 
 # Connect to the Access database
@@ -25,180 +383,105 @@ dermatology_visits <- sqlFetch(db, "Visits")
 # Close the connection
 close(db)
 
-# Convert date columns to Date type
-medical_history <- medical_history %>% mutate(GeneticsVisit = ymd(GeneticsVisit))
-dermatology_visits <- dermatology_visits %>% mutate(VisitDate = ymd(VisitDate))
+# Filter out patients with a GeneticsVisit after February 16, 2024
+medical_history <- medical_history %>%
+  filter(as.Date(GeneticsVisit, format="%Y-%m-%d") <= as.Date("2024-02-16"))
 
-# Print summaries to verify correct data import and conversion
-print(summary(medical_history))
-print(summary(dermatology_visits))
+# Join the medical_history and dermatology_visits tables on MRN to include Mutation
+filtered_visits <- dermatology_visits %>%
+  inner_join(medical_history, by = "MRN")
 
-# Count and exclude patients with a GeneticsVisit after January 14, 2024
-excluded_patients <- medical_history %>% filter(GeneticsVisit > dmy("14/01/2024"))
-excluded_count <- nrow(excluded_patients)
-
-# Print the number of excluded patients
-print(paste("Number of excluded patients:", excluded_count))
-
-# Filter patients
-medical_history <- medical_history %>% filter(GeneticsVisit <= dmy("14/01/2024"))
-
-# Define guidelines for each mutation and a guideline interval in months for each mutation
-mutation_guidelines <- data.frame(
-  Mutation = c("BRCA2", "PALB2", "MSH6", "MLH1", "PMS2", "CHEK2", "TP53", "MITF", "BRCA1",
-               "PTEN", "NF1", "FH", "SDHA", "FLCN", "ATM", "CDKN2A", "RET", "POT1", "TTR", "MSH2", "MUTYH", "BARD1"), 
-  IntervalMonths = c(18, 18, 30, 30, 30, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 12, 18, 18, 18, 30, 18, 18)
+# Define gene categories
+gene_categories <- c(
+  "BRCA1" = "BRCA1",
+  "BRCA2" = "BRCA2",
+  "MLH1" = "Lynch syndrome",
+  "MSH2" = "Lynch syndrome",
+  "MSH6" = "Lynch syndrome",
+  "PMS2" = "Lynch syndrome",
+  "CHEK2" = "Other",
+  "MUTYH" = "Other",
+  "PALB2" = "Other",
+  "ATM" = "Other",
+  "CDKN2A" = "Other",
+  "FH" = "Other",
+  "FLCN" = "Other",
+  "MITF" = "Other",
+  "POT1" = "Other",
+  "PTEN" = "Other",
+  "RET" = "Other",
+  "TP53" = "Other",
+  "NF1" = "Other",
+  "TTR" = "Other"
 )
 
-# Split multiple genes into separate rows and merge with guidelines
-medical_history <- medical_history %>%
-  separate_rows(Mutation, sep = ",") %>%
-  left_join(mutation_guidelines, by = "Mutation") %>%
-  group_by(MRN, GeneticsVisit) %>%
-  summarize(
-    IntervalMonths = ifelse(all(is.na(IntervalMonths)), 18, min(IntervalMonths, na.rm = TRUE)),
-    .groups = 'drop'
-  ) %>%
-  mutate(IntervalMonths = ifelse(is.infinite(IntervalMonths) | is.na(IntervalMonths), 18, IntervalMonths))
+# Split the Mutation field into separate rows for each mutation
+filtered_visits <- filtered_visits %>%
+  separate_rows(Mutation, sep = ";") %>%
+  mutate(Mutation = str_trim(Mutation)) # Trim whitespace from mutations
 
-# Print summary of medical history after merging
-print(summary(medical_history))
+# Map each mutation to its category
+filtered_visits <- filtered_visits %>%
+  mutate(MutationCategory = gene_categories[Mutation]) %>%
+  replace_na(list(MutationCategory = "Unknown"))
 
-# Join tables based on MRN
-combined_data <- medical_history %>%
-  left_join(dermatology_visits, by = "MRN") %>%
-  left_join(family_history, by = "MRN")
+# Summarize the number of patients with each MutationCategory within BxCodeSimpleSimple
+patients_per_mutation_result <- filtered_visits %>%
+  filter(!is.na(MutationCategory) & !is.na(BxCodeSimpleSimple)) %>%
+  group_by(BxCodeSimpleSimple, MutationCategory) %>%
+  summarise(PatientCount = n_distinct(MRN))
 
-# Print summary of combined data
-print(summary(combined_data))
+# Calculate percentage for each MutationCategory within its BxCodeSimpleSimple category
+patients_per_mutation_result <- patients_per_mutation_result %>%
+  group_by(BxCodeSimpleSimple) %>%
+  mutate(Percentage = PatientCount / sum(PatientCount) * 100)
 
-# Define a function to check compliance based on repeated guideline intervals and FBSE check
-check_compliance <- function(data, end_date) {
-  data %>%
-    group_by(MRN) %>%
-    summarize(
-      MRN = first(MRN),
-      GeneticsVisit = first(GeneticsVisit),
-      GuidelineInterval = first(IntervalMonths),
-      Compliant = {
-        # Check if the patient has any dermatology visits
-        if (all(is.na(data$VisitDate[data$MRN == first(MRN)]))) {
-          compliance <- FALSE
-        } else {
-          compliance <- TRUE
-          current_date <- GeneticsVisit
-          
-          # Perform interval-based compliance check
-          while (current_date <= end_date) {
-            interval_end <- current_date + months(GuidelineInterval)
-            if (is.na(interval_end)) break
-            visits_in_interval <- data$VisitDate[data$MRN == first(MRN) & data$VisitDate >= current_date & data$VisitDate <= interval_end & data$FBSE == TRUE]
-            
-            # Debugging print statements
-            print(paste("MRN:", first(MRN)))
-            print(paste("Checking interval from", current_date, "to", interval_end))
-            print(paste("Visits in interval:", length(visits_in_interval)))
-            
-            if (length(visits_in_interval) == 0) {
-              compliance <- FALSE
-            }
-            
-            current_date <- interval_end
-          }
-          
-          # Re-evaluate compliance for non-compliant patients with GeneticsVisit after January 14, 2023
-          if (!compliance & GeneticsVisit > dmy("14/01/2023")) {
-            prior_visits <- data$VisitDate[data$MRN == first(MRN) & data$VisitDate >= (GeneticsVisit - years(1)) & data$VisitDate < GeneticsVisit & data$FBSE == TRUE]
-            if (length(prior_visits) > 0) {
-              compliance <- TRUE
-            }
-          }
-          
-          # Additional re-evaluation step: ensure compliance in all intervals except the most recent
-          if (!compliance) {
-            interval_compliance <- TRUE
-            current_date <- GeneticsVisit
-            while (current_date <= (end_date - months(GuidelineInterval))) {
-              interval_end <- current_date + months(GuidelineInterval)
-              if (is.na(interval_end)) break
-              visits_in_interval <- data$VisitDate[data$MRN == first(MRN) & data$VisitDate >= current_date & data$VisitDate <= interval_end & data$FBSE == TRUE]
-              
-              # Debugging print statements
-              print(paste("MRN:", first(MRN)))
-              print(paste("Checking interval from", current_date, "to", interval_end))
-              print(paste("Visits in interval:", length(visits_in_interval)))
-              
-              if (length(visits_in_interval) == 0) {
-                interval_compliance <- FALSE
-                break
-              }
-              
-              current_date <- interval_end
-            }
-            if (interval_compliance) {
-              # Check the most recent interval
-              last_interval_start <- current_date
-              last_interval_end <- end_date
-              visits_in_last_interval <- data$VisitDate[data$MRN == first(MRN) & data$VisitDate >= last_interval_start & data$VisitDate <= last_interval_end & data$FBSE == TRUE]
-              
-              # Debugging print statements
-              print(paste("MRN:", first(MRN)))
-              print(paste("Checking last interval from", last_interval_start, "to", last_interval_end))
-              print(paste("Visits in last interval:", length(visits_in_last_interval)))
-              
-              # If the only non-compliance is in the final interval which extends beyond the end date, mark as compliant
-              if (length(visits_in_last_interval) == 0 && last_interval_end > end_date) {
-                compliance <- TRUE
-              } else if (length(visits_in_last_interval) == 0) {
-                compliance <- FALSE
-              }
-            } else {
-              compliance <- FALSE
-            }
-          }
-        }
-        
-        # Final compliance status
-        compliance_status <- ifelse(compliance, "Yes", "No")
-        
-        # Debugging print statements
-        print(paste("Final compliance for MRN", first(MRN), ":", compliance_status))
-        
-        compliance_status
-      }
-    )
-}
+# Ungroup the data and complete the data to include all combinations of BxCodeSimpleSimple and MutationCategory
+complete_data <- patients_per_mutation_result %>%
+  ungroup() %>%
+  complete(BxCodeSimpleSimple, MutationCategory, fill = list(Percentage = 0))
 
-# Define the end date for compliance check
-end_date <- ymd("2024-07-14")
+# Reorder the levels of BxCodeSimpleSimple on the x-axis
+complete_data <- complete_data %>%
+  mutate(BxCodeSimpleSimple = factor(BxCodeSimpleSimple, levels = c("BENIGN", "ATYPICAL NEVUS", "ACTINIC KERATOSIS", "NON-MELANOMA SKIN CANCER", "MELANOMA")))
 
-# Check compliance
-compliance_data <- check_compliance(combined_data, end_date)
+# Define custom colors for categories
+custom_colors <- c(
+  "BRCA1" = "#F8766D",
+  "BRCA2" = "#7CAE00",
+  "Lynch syndrome" =  "#00BFC4",
+  "Other" =  "#C77CFF"
+)
 
-# Print summary of compliance data
-print(summary(compliance_data))
+# Plot a single bar chart combining all categories with custom colors, percentages, and outlines
+combined_bar_chart <- complete_data %>%
+  ggplot(aes(x = BxCodeSimpleSimple, y = Percentage, fill = MutationCategory)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9), color = "black") +  # Add outlines (borders) to bars with spacing
+  scale_fill_manual(values = custom_colors) +  # Apply custom colors
+  scale_y_continuous(limits = c(0, 60)) +  # Set y-axis limit to 60
+  labs(title = "Distribution of Mutation Categories Across BxCodeSimpleSimple",
+       x = "BxCodeSimpleSimple", y = "Percentage (%)",
+       fill = "Mutation Category") +
+  theme_minimal() +
+  theme(panel.spacing = unit(2, "lines"))  # Add additional space between categories
 
-# Filter for compliant patients
-compliant_patients <- compliance_data %>% filter(Compliant == "Yes")
+# Print the combined bar chart
+print(combined_bar_chart)
 
-# List MRNs of compliant patients
-compliant_mrns <- compliant_patients$MRN
-print(compliant_mrns)
 
-# Filter for noncompliant patients
-noncompliant_patients <- compliance_data %>% filter(Compliant == "No")
 
-# List MRNs of noncompliant patients
-noncompliant_mrns <- noncompliant_patients$MRN
-print(noncompliant_mrns)
-
-# Plot compliance
-ggplot(compliance_data, aes(x = Compliant, fill = Compliant)) +
-  geom_bar() +
-  labs(
-    title = "Patient Compliance with Dermatology Visit Guidelines",
-    x = "Compliance",
-    y = "Number of Patients"
-  ) +
+# Plot a stacked bar plot combining all categories with custom colors
+stacked_bar_plot <- complete_data %>%
+  ggplot(aes(x = BxCodeSimpleSimple, y = Percentage, fill = MutationCategory)) +
+  geom_bar(stat = "identity") +  # Create stacked bar plot
+  scale_fill_manual(values = custom_colors) +  # Apply custom colors
+  scale_y_continuous(limits = c(0, 100)) +  # Set y-axis limit to 100% for full stacking
+  labs(title = "Distribution of Mutation Categories Across BxCodeSimpleSimple",
+       x = "BxCodeSimpleSimple", y = "Percentage (%)",
+       fill = "Mutation Category") +
   theme_minimal()
+
+# Print the stacked bar plot
+print(stacked_bar_plot)
+
 
