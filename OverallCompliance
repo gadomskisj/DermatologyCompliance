@@ -153,22 +153,13 @@ gene_categories <- c(
   "MSH2" = "Lynch syndrome",
   "MSH6" = "Lynch syndrome",
   "PMS2" = "Lynch syndrome",
-  "CHEK2" = "Other",
-  "MUTYH" = "Other",
-  "PALB2" = "Other",
   "ATM" = "Other",
   "CDKN2A" = "Other",
-  "FH" = "Other",
   "FLCN" = "Other",
   "MITF" = "Other",
   "POT1" = "Other",
   "PTEN" = "Other",
-  "RET" = "Other",
   "TP53" = "Other",
-  "NF1" = "Other",
-  "BARD1" = "Other",
-  "SDHA" = "Other",
-  "TTR" = "Other"
 )
 
 # Map the mutations to categories
@@ -399,20 +390,13 @@ gene_categories <- c(
   "MSH2" = "Lynch syndrome",
   "MSH6" = "Lynch syndrome",
   "PMS2" = "Lynch syndrome",
-  "CHEK2" = "Other",
-  "MUTYH" = "Other",
-  "PALB2" = "Other",
   "ATM" = "Other",
   "CDKN2A" = "Other",
-  "FH" = "Other",
   "FLCN" = "Other",
   "MITF" = "Other",
   "POT1" = "Other",
   "PTEN" = "Other",
-  "RET" = "Other",
   "TP53" = "Other",
-  "NF1" = "Other",
-  "TTR" = "Other"
 )
 
 # Split the Mutation field into separate rows for each mutation
